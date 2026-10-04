@@ -24,16 +24,14 @@ impl IntoResponse for AppError {
                 Json(json!({
                     "error": msg
                 })),
-            )
-                .into_response(),
+            ).into_response(),
 
             AppError::NotFound => (
                 StatusCode::NOT_FOUND,
                 Json(json!({
                     "error": "Short Url not found"
                 })),
-            )
-                .into_response(),
+            ).into_response(),
 
             AppError::Database(error) => {
                 eprintln!("Database error: {}", error);

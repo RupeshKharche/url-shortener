@@ -4,6 +4,7 @@ use crate::models::{CreateUrlRequest, CreateUrlResponse, Url as UrlModel};
 use axum::Json;
 use axum::extract::{Path, State};
 use axum::response::Redirect;
+use chrono::{Duration, Utc};
 use rand::Rng;
 use sqlx::Error;
 use url::Url;
@@ -46,6 +47,9 @@ pub async fn shorten_url(
     let parsed_url =
         Url::parse(&payload.url).map_err(|_| AppError::BadRequest("Invalid URL".to_string()))?;
 
+    let ttl_seconds = payload.ttl_seconds.unwrap_or(app_config.default_code_ttl_seconds);
+    let expires_at = Utc::now() + Duration::seconds(ttl_seconds as i64);
+
     // Only allow http and https urls
     if parsed_url.scheme() != "http" && parsed_url.scheme() != "https" {
         return Err(AppError::BadRequest(
@@ -63,13 +67,14 @@ pub async fn shorten_url(
         // Insert into the db, keep on looping until the generated code is unique
         let result = sqlx::query(
             r#"
-                insert into urls (id, code, original_url)
-                values (?, ?, ?)
+                insert into urls (id, code, original_url, expires_at)
+                values (?, ?, ?, ?)
                 "#,
         )
         .bind(&id)
         .bind(&code)
         .bind(&original_url)
+        .bind(&expires_at.to_rfc3339())
         .execute(&state.db)
         .await;
 
@@ -91,13 +96,15 @@ pub async fn shorten_url(
 
     println!("Created {id} -> {original_url}");
 
-    Ok(Json(CreateUrlResponse { short_url }))
+    Ok(Json(CreateUrlResponse { short_url, expires_at: expires_at.to_rfc3339() }))
 }
 
 pub async fn redirect_to_url(
     State(state): State<AppState>,
     Path(code): Path<String>,
 ) -> Result<Redirect, AppError> {
+    let now = Utc::now();
+
     // Fetch the original url against the given code
     let url = sqlx::query_as::<_, UrlModel>(
         r#"
@@ -105,13 +112,20 @@ pub async fn redirect_to_url(
                 id,
                 original_url,
                 code,
-                created_at
+                created_at,
+                expires_at
             from
                 urls
-            where code = ?
+            where
+                code = ?
+                and (
+                    expires_at is null
+                    or expires_at > ?
+                )
             "#,
     )
     .bind(&code)
+    .bind(&now.to_rfc3339())
     .fetch_optional(&state.db)
     .await?;
 
