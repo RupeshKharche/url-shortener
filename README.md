@@ -10,7 +10,6 @@ A simple, fast URL shortener built with Rust, Axum, and SQLite.
 - SQLite database for persistence
 - Configurable short code length
 - **URL expiration (TTL)** — per-link or default TTL
-- **Rate limiting** — per-IP limits on all endpoints
 
 ## Tech Stack
 
@@ -18,7 +17,6 @@ A simple, fast URL shortener built with Rust, Axum, and SQLite.
 - **Web Framework**: Axum
 - **Database**: SQLite (via SQLx)
 - **Async Runtime**: Tokio
-- **Rate Limiting**: Governor (token bucket)
 
 ## Prerequisites
 
@@ -40,19 +38,12 @@ A simple, fast URL shortener built with Rust, Axum, and SQLite.
    BASE_URL=http://localhost:8080
    CODE_LENGTH=6
    DEFAULT_CODE_TTL_SECONDS=3600
-   RATE_LIMIT_SHORTEN=10
-   RATE_LIMIT_SHORTEN_WINDOW_SECS=60
-   RATE_LIMIT_REDIRECT=100
-   RATE_LIMIT_REDIRECT_WINDOW_SECS=60
-   RATE_LIMIT_HEALTH=60
-   RATE_LIMIT_HEALTH_WINDOW_SECS=60
    ```
 
    - `DATABASE_URL`: SQLite connection string (file path)
    - `BASE_URL`: Base URL for generated short links
    - `CODE_LENGTH`: Length of generated short codes (default: 6)
    - `DEFAULT_CODE_TTL_SECONDS`: Default link lifetime in seconds (default: 3600)
-   - `RATE_LIMIT_*`: Per-endpoint rate limits (requests per window)
 
 3. **Run database migrations**
    The database and tables are created automatically on first run via SQLx.
@@ -71,11 +62,11 @@ The server starts at `http://localhost:8080`.
 
 ## API Endpoints
 
-| Method | Endpoint | Description | Rate Limit |
-|--------|----------|-------------|------------|
-| `GET` | `/health` | Health check | 60/min |
-| `POST` | `/api/shorten` | Create a short URL | 10/min |
-| `GET` | `/{code}` | Redirect to original URL | 100/min |
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| `GET` | `/health` | Health check |
+| `POST` | `/api/shorten` | Create a short URL |
+| `GET` | `/{code}` | Redirect to original URL |
 
 ### Create Short URL
 
@@ -106,19 +97,6 @@ Redirects to the original URL with HTTP 302.
 
 Returns **404 Not Found** if code doesn't exist or has expired (prevents enumeration).
 
-### Rate Limit Headers
-
-All responses include:
-```
-X-RateLimit-Limit: 10
-X-RateLimit-Remaining: 9
-```
-
-On 429 Too Many Requests:
-```
-Retry-After: 45
-```
-
 ## Load Testing
 
 ```bash
@@ -131,12 +109,11 @@ k6 run loadtest.js
 
 ```
 src/
-├── main.rs          # Application entry point, routing, state
-├── handlers.rs      # HTTP request handlers
-├── models.rs        # Data models and DTOs
-├── errors.rs        # Error types
-├── config.rs        # Configuration from environment
-└── rate_limit.rs    # Rate limiting middleware
+├── main.rs       # Application entry point, routing, state
+├── handlers.rs   # HTTP request handlers
+├── models.rs     # Data models and DTOs
+├── errors.rs     # Error types
+└── config.rs     # Configuration from environment
 
 migrations/
 ├── 001_create_urls.sql        # Database schema
