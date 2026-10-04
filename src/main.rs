@@ -1,10 +1,11 @@
-mod models;
+mod config;
 mod errors;
 mod handlers;
+mod models;
 
-use crate::handlers::{redirect_to_url, shorten_url};
+use crate::config::AppConfig;
+use crate::handlers::{health, redirect_to_url, shorten_url};
 use axum::Router;
-use axum::extract::State;
 use axum::routing::{get, post};
 use sqlx::SqlitePool;
 use std::net::SocketAddr;
@@ -13,34 +14,22 @@ use tokio::net::TcpListener;
 #[derive(Clone)]
 pub struct AppState {
     pub db: SqlitePool,
-    pub base_url: String,
-    pub code_length: usize,
+    pub config: AppConfig,
 }
 
-async fn health(
-    State(state): State<AppState>
-) -> &'static str {
-    match sqlx::query("select 1")
-        .execute(&state.db)
-        .await {
-        Ok(_) => "OK",
-        Err(_) => "Database Unavailable"
-    }
+async fn init_db(config: &AppConfig) -> anyhow::Result<SqlitePool> {
+    let pool = SqlitePool::connect(&config.db_url).await?;
+    println!("Connected to Sqlite");
+    Ok(pool)
 }
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    dotenvy::dotenv().ok();
+    let config = AppConfig::from_env()?;
 
-    let database_url = std::env::var("DATABASE_URL")?;
-    let base_url = std::env::var("BASE_URL")?;
-    let code_length = std::env::var("CODE_LENGTH")?.trim().parse()?;
+    let db = init_db(&config).await?;
 
-    let db = SqlitePool::connect(&database_url).await?;
-
-    println!("Connected to sqlite");
-
-    let state = AppState{ db, base_url, code_length };
+    let state = AppState { db, config };
 
     let app = Router::new()
         .route("/health", get(health))
@@ -52,11 +41,9 @@ async fn main() -> anyhow::Result<()> {
 
     println!("Server running on http://{}", addr);
 
-    let listener = TcpListener::bind(addr)
-        .await?;
+    let listener = TcpListener::bind(addr).await?;
 
-    axum::serve(listener, app)
-        .await?;
+    axum::serve(listener, app).await?;
 
     Ok(())
 }

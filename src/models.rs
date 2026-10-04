@@ -11,10 +11,10 @@ pub struct Url {
 
 #[derive(Debug, Deserialize)]
 pub struct CreateUrlRequest {
-    pub url: String
+    pub url: String,
 }
 
 #[derive(Debug, Serialize)]
 pub struct CreateUrlResponse {
-    pub short_url: String
+    pub short_url: String,
 }

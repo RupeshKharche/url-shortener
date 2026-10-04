@@ -7,7 +7,7 @@ use sqlx::Error;
 pub enum AppError {
     BadRequest(String),
     NotFound,
-    Database(sqlx::Error)
+    Database(sqlx::Error),
 }
 
 impl From<sqlx::Error> for AppError {
