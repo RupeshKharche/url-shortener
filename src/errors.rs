@@ -8,6 +8,7 @@ pub enum AppError {
     BadRequest(String),
     NotFound,
     Database(sqlx::Error),
+    RateLimited
 }
 
 impl From<sqlx::Error> for AppError {
@@ -44,6 +45,13 @@ impl IntoResponse for AppError {
                 )
                     .into_response()
             }
+
+            AppError::RateLimited => (
+                StatusCode::TOO_MANY_REQUESTS,
+                Json(json!({
+                    "error": "You have sent too many requests. Please try again in some time."
+                })),
+            ).into_response(),
         }
     }
 }
